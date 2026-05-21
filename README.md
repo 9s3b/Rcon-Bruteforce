@@ -182,121 +182,233 @@ Running this toolkit on a list of **thousands of Minecraft servers** (port 25565
 
 ---
 
-## Plugin Exploitation (Post-Compromise)
+# Plugin Exploitation (Post-Compromise)
 
-Once inside via RCON, attackers can exploit installed plugins:
+Once attackers gain access through exposed or weakly protected RCON, they may abuse installed plugins to escalate privileges, maintain persistence, or access sensitive player/server data.
 
-### Essentials (Common Plugin)
+## Essentials / EssentialsX
+
 ```bash
-/lp user target permission set "essentials.sudo" true
-/sudo target whoami
+/lp user attacker permission set essentials.sudo true
+/sudo target say test
 ```
-**Risk:** System command injection → full server compromise
 
-### LuckPerms
-```bash
-/lp user attacker permission set "*" true
-```
-**Risk:** Permission escalation → admin access
+### Important clarification
 
-### AuthMe (SQL Injection)
-```bash
-/authme getip target_player
-```
-**Risk:** Database theft, password cracking
+EssentialsX itself does not normally provide operating-system command execution.
 
-### ViaVersion (Protocol Exploit)
-Older versions vulnerable to Log4j (CVE-2021-44228)
-**Risk:** Remote code execution via chat messages
+However, attackers with administrative access may abuse features such as `/sudo` for:
+- impersonation,
+- moderation abuse,
+- social engineering,
+- or persistence after compromise.
 
 ---
 
-## Why This Is Dangerous
+## LuckPerms
 
-### 1. Scale
-- **~6% of scanned servers** with port 25575 opened were vulnerable
+```bash
+/lp user attacker permission set * true
+```
 
-### 2. Pivot Attacks
-The same weak password could work on:
-- SSH (port 22) → full system access
-- MySQL (port 3306) → database theft
-- Web panels (port 8080) → server control
+### What this does
 
-### 3. Permanent Backdoors
-Once compromised, attackers can:
-- Install malicious plugins
-- Add hidden admin accounts
-- Use server as botnet C2
-- Mine cryptocurrency on server hardware
+If an attacker already has sufficient RCON or console access, they can grant themselves wildcard permissions (`*`) or operator-equivalent privileges.
 
-### 4. Player Data Theft
-Extracted information includes:
-- Player IP addresses and geolocation
-- Login times and patterns
-- Inventory and coordinates
-- Private chat logs
+### Real risk
+
+* Full administrative control
+* Hidden persistence groups
+* Access to moderation/admin plugins
+* Long-term privilege escalation
+
+### Important clarification
+
+LuckPerms itself is not the vulnerability here — it is being abused after initial compromise.
 
 ---
 
-## Mitigation for Server Owners
+## Log4Shell
 
-**If you run a Minecraft server with RCON enabled:**
+Many Minecraft servers and modded ecosystems were historically affected by Log4Shell (CVE-2021-44228).
 
-1. **Change the password immediately**
-   ```properties
-   # server.properties
-   rcon.password=USE_A_STRONG_RANDOM_PASSWORD_32_CHARS
-   ```
+### Conditions required
 
-2. **Firewall port 25575**
-   ```bash
-   # Allow only your IP
-   sudo ufw allow from YOUR_IP to any port 25575
-   ```
+Servers were primarily vulnerable if they:
 
-3. **Use SSH tunneling instead of exposed RCON**
-   ```bash
-   ssh -L 25575:localhost:25575 user@server
-   ```
+* used unpatched Java/Log4j versions,
+* ran affected server software/mods,
+* and had not applied Mojang or Java mitigations.
 
-4. **Update all plugins** (especially Essentials, AuthMe, ViaVersion)
+### Real risk
 
-5. **Check logs for unauthorized access**
-   ```bash
-   grep "RCON" logs/latest.log
-   ```
+* Historical remote code execution (RCE)
 
-6. **Disable RCON if not needed**
-   ```properties
-   enable-rcon=false
-   ```
+### Current status
+
+Modern Java runtimes, updated Paper/Spigot/Purpur builds, and maintained plugins generally mitigate this issue.
 
 ---
 
-## Detection (For Network Defenders)
+# Why This Is Dangerous
 
-**Look for these indicators:**
+## 1. Scale
 
-1. **Port 25575 exposed to internet** (nmap scan)
-   ```bash
-   nmap -p 25575 --open your-network
-   ```
+Some internet-wide scans and community research have found that a measurable percentage of publicly exposed RCON services were vulnerable due to:
 
-2. **Suspicious RCON log entries**
-   ```
-   [INFO] RCON connection from /1.2.3.4
-   [INFO] RCON login attempt with password [common] - SUCCESSFUL
-   ```
+* weak passwords,
+* reused credentials,
+* or insecure configurations.
 
-3. **Unexpected operator additions**
-   ```
-   [INFO] Made UnknownPlayer a server operator
-   ```
+One internet-wide scan commonly cited in community research found that roughly **~6% of publicly exposed RCON services** were accessible due to weak or guessable credentials.
 
-4. **Unusual commands via RCON**
-   ```
-   [INFO] UnknownPlayer issued server command: /op Attacker
-   ```
+### Real risk
+
+Attackers routinely scan for:
+
+* TCP/25575 (RCON)
+* weak credentials
+* exposed game administration services
+* outdated management software
+
+---
+
+## 2. Pivot Attacks
+
+The same weak or reused password may also work on:
+
+* SSH (port 22) → full host access
+* MySQL/MariaDB (port 3306) → database theft
+* Web panels (port 8080/8081) → infrastructure control
+* FTP/SFTP services → file modification
+
+---
+
+
+# Mitigation for Server Owners
+
+## If you run a Minecraft server with RCON enabled:
+
+### 1. Use a Strong Unique Password
+
+```properties
+# server.properties
+rcon.password=LONG_RANDOM_UNIQUE_PASSWORD
+```
+
+Recommended:
+
+* 20–32 random characters
+* unique credentials
+* password manager storage
+
+---
+
+### 2. Restrict Port 25575
+
+```bash
+# Allow only your IP
+sudo ufw allow from YOUR_IP to any port 25575 proto tcp
+```
+
+Prefer binding RCON to localhost where possible.
+
+---
+
+### 3. Use SSH Tunneling or a VPN
+
+```bash
+ssh -L 25575:localhost:25575 user@server
+```
+
+This avoids exposing RCON directly to the internet.
+
+---
+
+### 4. Keep Software Updated
+
+Update:
+
+* Java runtime
+* Paper/Spigot/Purpur
+* plugins/mods
+* server management panels
+
+Especially:
+
+* authentication plugins
+* permission systems
+* administration plugins
+
+---
+
+### 5. Audit Logs
+
+```bash
+grep -i "rcon" logs/latest.log
+```
+
+Look for:
+
+* unknown IPs,
+* unusual commands,
+* permission changes,
+* or unexpected operator assignments.
+
+---
+
+### 6. Disable RCON if Unnecessary
+
+```properties
+enable-rcon=false
+```
+
+---
+
+# Detection (For Network Defenders)
+
+## Indicators of Exposure or Compromise
+
+### 1. Open RCON Port
+
+```bash
+nmap -p 25575 --open TARGET
+```
+
+---
+
+### 2. Suspicious RCON Connections
+
+```text
+[INFO]: RCON connection from x.x.x.x
+```
+
+---
+
+### 3. Permission Escalation Activity
+
+```text
+/ lp user attacker permission set * true
+```
+
+---
+
+### 4. Unexpected Operator Grants
+
+```text
+Made UnknownPlayer a server operator
+```
+
+---
+
+### 5. Suspicious Plugin Activity
+
+Look for:
+
+* newly added `.jar` files,
+* modified startup scripts,
+* cron/systemd persistence,
+* or unusual scheduled tasks.
 
 ---
 
